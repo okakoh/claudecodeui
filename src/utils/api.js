@@ -128,6 +128,28 @@ export const api = {
       }),
   },
   
+  // AI endpoints
+  ai: {
+    chat: (data) => fetch('/api/ai/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }),
+    generateOverview: (data) => fetch('/api/ai/generate-overview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }),
+    config: () => fetch('/api/ai/config'),
+  },
+  
   // Generic GET method for any endpoint
   get: (endpoint) => authenticatedFetch(`/api${endpoint}`),
+  
+  // Generic POST method for any endpoint
+  post: (endpoint, data) => authenticatedFetch(`/api${endpoint}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  }),
 };
