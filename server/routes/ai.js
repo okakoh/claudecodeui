@@ -20,7 +20,19 @@ const AI_PROVIDERS = {
   gemini: {
     name: 'Gemini',
     baseUrl: 'https://generativelanguage.googleapis.com/v1beta/models',
-    defaultModel: 'gemini-1.5-flash-002',
+    defaultModel: 'gemini-2.5-flash',
+    availableModels: [
+      {
+        id: 'gemini-2.5-flash',
+        label: 'Gemini 2.5 Flash',
+        description: 'Fast multimodal model suitable for day-to-day use'
+      },
+      {
+        id: 'gemini-2.5-pro',
+        label: 'Gemini 2.5 Pro',
+        description: 'Highest quality Gemini model with better reasoning capabilities'
+      }
+    ],
     headers: (apiKey) => ({
       'Content-Type': 'application/json',
       'x-goog-api-key': apiKey
@@ -40,7 +52,56 @@ const AI_PROVIDERS = {
 };
 
 // Get AI configuration from environment
-function getAIConfig() {
+function getAvailableModelIds(providerConfig) {
+  if (!providerConfig?.availableModels) {
+    return [];
+  }
+
+  return providerConfig.availableModels
+    .map((option) => (typeof option === 'string' ? option : option?.id))
+    .filter(Boolean);
+}
+
+function formatModelOptions(providerConfig) {
+  if (!providerConfig?.availableModels) {
+    return [];
+  }
+
+  return providerConfig.availableModels
+    .map((option) => {
+      if (typeof option === 'string') {
+        return { id: option, label: option };
+      }
+
+      if (!option?.id) {
+        return null;
+      }
+
+      return {
+        id: option.id,
+        label: option.label || option.id,
+        description: option.description
+      };
+    })
+    .filter(Boolean);
+}
+
+function validateModel(providerConfig, model) {
+  if (!model) {
+    return;
+  }
+
+  const allowedModels = getAvailableModelIds(providerConfig);
+
+  if (allowedModels.length > 0 && !allowedModels.includes(model)) {
+    const error = new Error(`Unsupported model "${model}" for ${providerConfig.name}.`);
+    error.statusCode = 400;
+    error.allowedModels = allowedModels;
+    throw error;
+  }
+}
+
+function getAIConfig(options = {}) {
   const provider = process.env.AI_PROVIDER || 'gemini';
   const providerConfig = AI_PROVIDERS[provider];
 
@@ -54,9 +115,17 @@ function getAIConfig() {
     throw new Error(`AI_API_KEY environment variable is required for ${providerConfig.name}`);
   }
 
-  const modelOverride =
+  const requestedModel = options.model;
+  const envModelOverride =
     provider === 'gemini' ? process.env.GEMINI_MODEL : process.env.OPENROUTER_MODEL;
-  const model = modelOverride || providerConfig.defaultModel;
+
+  if (requestedModel) {
+    validateModel(providerConfig, requestedModel);
+  } else if (envModelOverride) {
+    validateModel(providerConfig, envModelOverride);
+  }
+
+  const model = requestedModel || envModelOverride || providerConfig.defaultModel;
 
   return {
     provider,
@@ -255,14 +324,14 @@ async function readFileContents(projectPath, fileReferences) {
 // POST /api/ai/chat - Main AI chat endpoint
 router.post('/chat', async (req, res) => {
   try {
-    const { message, context = {}, projectName } = req.body;
+    const { message, context = {}, projectName, model: requestedModel } = req.body;
 
     if (!message) {
       return res.status(400).json({ error: 'Message is required' });
     }
 
     // Get AI configuration
-    const aiConfig = getAIConfig();
+    const aiConfig = getAIConfig({ model: requestedModel });
     
     // Generate system prompt
     const systemPrompt = generateSystemPrompt(context.projectOverview, context.fileReferences);
@@ -296,9 +365,18 @@ router.post('/chat', async (req, res) => {
     
   } catch (error) {
     console.error('AI chat error:', error);
-    res.status(500).json({ 
+    const statusCode = error.statusCode || 500;
+
+    if (statusCode === 400) {
+      return res.status(statusCode).json({
+        error: error.message,
+        allowedModels: error.allowedModels
+      });
+    }
+
+    res.status(statusCode).json({
       error: 'Failed to process AI request',
-      details: error.message 
+      details: error.message
     });
   }
 });
@@ -306,14 +384,14 @@ router.post('/chat', async (req, res) => {
 // POST /api/ai/generate-overview - Generate project overview
 router.post('/generate-overview', async (req, res) => {
   try {
-    const { projectName, files } = req.body;
+    const { projectName, files, model: requestedModel } = req.body;
     
     if (!projectName || !files) {
       return res.status(400).json({ error: 'Project name and files are required' });
     }
     
     // Get AI configuration
-    const aiConfig = getAIConfig();
+    const aiConfig = getAIConfig({ model: requestedModel });
     
     // Create system prompt for overview generation
     const systemPrompt = `You are an AI assistant that generates project overviews. Analyze the provided file structure and generate a comprehensive overview including:
@@ -346,9 +424,18 @@ Be concise but informative. Focus on helping developers understand the project s
     
   } catch (error) {
     console.error('AI overview generation error:', error);
-    res.status(500).json({ 
+    const statusCode = error.statusCode || 500;
+
+    if (statusCode === 400) {
+      return res.status(statusCode).json({
+        error: error.message,
+        allowedModels: error.allowedModels
+      });
+    }
+
+    res.status(statusCode).json({
       error: 'Failed to generate project overview',
-      details: error.message 
+      details: error.message
     });
   }
 });
@@ -360,6 +447,7 @@ router.get('/config', (req, res) => {
     res.json({
       provider: config.provider,
       model: config.model,
+      availableModels: formatModelOptions(config.config),
       configured: true
     });
   } catch (error) {

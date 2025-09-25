@@ -92,7 +92,8 @@ AI_PROVIDER=openrouter
 AI_API_KEY=your-openrouter-api-key-here
 
 # Default models
-# GEMINI_MODEL defaults to gemini-1.5-flash-002 (latest fast tier)
+# GEMINI_MODEL defaults to gemini-2.5-flash (latest fast Gemini release)
+#   - Switch to gemini-2.5-pro in .env or from the in-app model selector for higher quality responses
 # OPENROUTER_MODEL defaults to meta-llama/llama-3.1-405b-instruct (popular high-quality free model)
 ```
 

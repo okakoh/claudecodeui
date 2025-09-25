@@ -21,6 +21,9 @@ function AIChatInterface({ selectedProject, onFileOpen }) {
   const [projectOverview, setProjectOverview] = useState(null);
   const [availableFiles, setAvailableFiles] = useState([]);
   const [copiedMessageId, setCopiedMessageId] = useState(null);
+  const [aiConfig, setAiConfig] = useState(null);
+  const [selectedModel, setSelectedModel] = useState('');
+  const [configError, setConfigError] = useState(null);
   
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
@@ -33,6 +36,52 @@ function AIChatInterface({ selectedProject, onFileOpen }) {
   useEffect(() => {
     scrollToBottom();
   }, [messages, scrollToBottom]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchConfig = async () => {
+      try {
+        const response = await api.ai.config();
+        if (!response.ok) {
+          throw new Error(`Request failed with status ${response.status}`);
+        }
+
+        const data = await response.json();
+        if (!isMounted) return;
+
+        setAiConfig(data);
+
+        const availableIds = (data.availableModels || []).map((option) => option.id).filter(Boolean);
+        const savedModel = localStorage.getItem('ai-chat-model');
+
+        if (savedModel && availableIds.includes(savedModel)) {
+          setSelectedModel(savedModel);
+        } else if (data.model) {
+          setSelectedModel(data.model);
+          if (availableIds.includes(data.model)) {
+            localStorage.setItem('ai-chat-model', data.model);
+          }
+        } else {
+          setSelectedModel('');
+        }
+
+        setConfigError(null);
+      } catch (err) {
+        console.error('Failed to load AI configuration:', err);
+        if (!isMounted) return;
+        setAiConfig(null);
+        setSelectedModel('');
+        setConfigError('AI configuration is unavailable.');
+      }
+    };
+
+    fetchConfig();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Load project overview and files when project changes
   useEffect(() => {
@@ -243,11 +292,17 @@ function AIChatInterface({ selectedProject, onFileOpen }) {
         userMessage: input.trim()
       };
 
-      const response = await api.ai.chat({
+      const payload = {
         message: input.trim(),
         context,
         projectName: selectedProject.name
-      });
+      };
+
+      if (showModelSelector && selectedModel) {
+        payload.model = selectedModel;
+      }
+
+      const response = await api.ai.chat(payload);
 
       if (!response.ok) {
         throw new Error(`API request failed: ${response.status}`);
@@ -309,6 +364,29 @@ function AIChatInterface({ selectedProject, onFileOpen }) {
     setError(null);
   };
 
+  const providerLabel = aiConfig?.provider === 'gemini'
+    ? 'Gemini'
+    : aiConfig?.provider === 'openrouter'
+    ? 'OpenRouter'
+    : aiConfig?.provider;
+
+  const modelOptions = aiConfig?.availableModels || [];
+  const showModelSelector = Boolean(
+    aiConfig?.configured &&
+    aiConfig.provider === 'gemini' &&
+    modelOptions.length > 0
+  );
+
+  const handleModelChange = useCallback((newModel) => {
+    const validIds = modelOptions.map((option) => option.id);
+    if (!validIds.includes(newModel)) {
+      return;
+    }
+
+    setSelectedModel(newModel);
+    localStorage.setItem('ai-chat-model', newModel);
+  }, [modelOptions]);
+
   if (!selectedProject) {
     return (
       <div className="h-full flex items-center justify-center">
@@ -325,7 +403,7 @@ function AIChatInterface({ selectedProject, onFileOpen }) {
     <div className="h-full flex flex-col bg-white dark:bg-gray-900">
       {/* Header */}
       <div className="flex-shrink-0 border-b border-gray-200 dark:border-gray-700 p-4">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <Bot className="w-6 h-6 text-blue-600 dark:text-blue-400" />
             <div>
@@ -335,14 +413,45 @@ function AIChatInterface({ selectedProject, onFileOpen }) {
               <p className="text-sm text-gray-500 dark:text-gray-400">
                 Ask questions about {selectedProject.displayName}
               </p>
+              {aiConfig?.configured && providerLabel && (
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                  Using {providerLabel}
+                  {showModelSelector && selectedModel ? ` • ${selectedModel}` : ''}
+                </p>
+              )}
+              {configError && (
+                <p className="text-xs text-red-500 mt-1">{configError}</p>
+              )}
             </div>
           </div>
-          <button
-            onClick={clearChat}
-            className="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md transition-colors"
-          >
-            Clear Chat
-          </button>
+          <div className="flex items-center gap-3">
+            {showModelSelector && (
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-md border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60">
+                <span className="text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wide">Model</span>
+                <select
+                  value={selectedModel}
+                  onChange={(e) => handleModelChange(e.target.value)}
+                  className="bg-transparent text-sm font-medium text-gray-900 dark:text-gray-100 focus:outline-none"
+                >
+                  {modelOptions.map((option) => (
+                    <option
+                      key={option.id}
+                      value={option.id}
+                      title={option.description || option.label || option.id}
+                    >
+                      {option.label || option.id}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <button
+              onClick={clearChat}
+              className="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md transition-colors"
+            >
+              Clear Chat
+            </button>
+          </div>
         </div>
       </div>
 
