@@ -1,6 +1,6 @@
 /*
  * AI Routes - API endpoints for AI chat functionality
- * 
+ *
  * Supports:
  * - Gemini API integration
  * - OpenRouter API integration
@@ -8,18 +8,19 @@
  * - Project overview generation
  */
 
-const express = require('express');
+import express from 'express';
+import fetch from 'node-fetch';
+import fs from 'fs/promises';
+import path from 'path';
+
 const router = express.Router();
-const fetch = require('node-fetch');
-const fs = require('fs').promises;
-const path = require('path');
 
 // AI Provider configurations
 const AI_PROVIDERS = {
   gemini: {
     name: 'Gemini',
     baseUrl: 'https://generativelanguage.googleapis.com/v1beta/models',
-    defaultModel: 'gemini-1.5-flash',
+    defaultModel: 'gemini-1.5-flash-002',
     headers: (apiKey) => ({
       'Content-Type': 'application/json',
       'x-goog-api-key': apiKey
@@ -28,12 +29,12 @@ const AI_PROVIDERS = {
   openrouter: {
     name: 'OpenRouter',
     baseUrl: 'https://openrouter.ai/api/v1',
-    defaultModel: 'anthropic/claude-3.5-sonnet',
+    defaultModel: 'meta-llama/llama-3.1-405b-instruct',
     headers: (apiKey) => ({
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${apiKey}`,
-      'HTTP-Referer': 'http://localhost:3001',
-      'X-Title': 'Claude Code UI'
+      'HTTP-Referer': process.env.OPENROUTER_REFERRER || 'http://localhost:3001',
+      'X-Title': process.env.OPENROUTER_TITLE || 'Claude Code UI'
     })
   }
 };
@@ -41,16 +42,27 @@ const AI_PROVIDERS = {
 // Get AI configuration from environment
 function getAIConfig() {
   const provider = process.env.AI_PROVIDER || 'gemini';
-  const apiKey = process.env.AI_API_KEY;
-  
-  if (!apiKey) {
-    throw new Error(`AI_API_KEY environment variable is required for ${provider}`);
+  const providerConfig = AI_PROVIDERS[provider];
+
+  if (!providerConfig) {
+    throw new Error(`Unsupported AI provider: ${provider}`);
   }
-  
+
+  const apiKey = process.env.AI_API_KEY;
+
+  if (!apiKey) {
+    throw new Error(`AI_API_KEY environment variable is required for ${providerConfig.name}`);
+  }
+
+  const modelOverride =
+    provider === 'gemini' ? process.env.GEMINI_MODEL : process.env.OPENROUTER_MODEL;
+  const model = modelOverride || providerConfig.defaultModel;
+
   return {
     provider,
-    config: AI_PROVIDERS[provider],
-    apiKey
+    config: providerConfig,
+    apiKey,
+    model
   };
 }
 
@@ -117,14 +129,13 @@ function prepareMessages(userMessage, systemPrompt, fileContents = []) {
 
 // Call AI API
 async function callAI(messages, config) {
-  const { provider, config: providerConfig, apiKey } = config;
+  const { provider, config: providerConfig, apiKey, model } = config;
   
   let requestBody;
   let url;
   
   if (provider === 'gemini') {
     // Gemini API format
-    const model = process.env.GEMINI_MODEL || providerConfig.defaultModel;
     url = `${providerConfig.baseUrl}/${model}:generateContent`;
     
     // Convert messages to Gemini format
@@ -152,9 +163,8 @@ async function callAI(messages, config) {
     }
   } else if (provider === 'openrouter') {
     // OpenRouter API format
-    const model = process.env.OPENROUTER_MODEL || providerConfig.defaultModel;
     url = `${providerConfig.baseUrl}/chat/completions`;
-    
+
     requestBody = {
       model,
       messages,
@@ -187,15 +197,43 @@ async function callAI(messages, config) {
 }
 
 // Read file contents
+const PROJECT_RESOLVE_CACHE = new Map();
+
+function getResolvedProjectPath(projectPath) {
+  if (!PROJECT_RESOLVE_CACHE.has(projectPath)) {
+    PROJECT_RESOLVE_CACHE.set(projectPath, path.resolve(projectPath));
+  }
+  return PROJECT_RESOLVE_CACHE.get(projectPath);
+}
+
+function isPathWithinProject(projectPath, targetPath) {
+  const normalizedProjectPath = getResolvedProjectPath(projectPath);
+  const resolvedTarget = path.resolve(projectPath, targetPath);
+
+  return (
+    resolvedTarget === normalizedProjectPath ||
+    resolvedTarget.startsWith(`${normalizedProjectPath}${path.sep}`)
+  );
+}
+
+// Read file contents
 async function readFileContents(projectPath, fileReferences) {
   const contents = [];
-  
+
   for (const fileRef of fileReferences) {
     try {
-      const filePath = path.join(projectPath, fileRef.path);
+      if (path.isAbsolute(fileRef.path)) {
+        throw new Error('Absolute paths are not allowed');
+      }
+
+      if (!isPathWithinProject(projectPath, fileRef.path)) {
+        throw new Error('Referenced path is outside of the project directory');
+      }
+
+      const filePath = path.resolve(projectPath, fileRef.path);
       const content = await fs.readFile(filePath, 'utf8');
       const extension = path.extname(fileRef.path).slice(1);
-      
+
       contents.push({
         path: fileRef.path,
         content: content.slice(0, 10000), // Limit file size to prevent token overflow
@@ -217,12 +255,12 @@ async function readFileContents(projectPath, fileReferences) {
 // POST /api/ai/chat - Main AI chat endpoint
 router.post('/chat', async (req, res) => {
   try {
-    const { message, context, projectName } = req.body;
-    
+    const { message, context = {}, projectName } = req.body;
+
     if (!message) {
       return res.status(400).json({ error: 'Message is required' });
     }
-    
+
     // Get AI configuration
     const aiConfig = getAIConfig();
     
@@ -231,11 +269,12 @@ router.post('/chat', async (req, res) => {
     
     // Read file contents if files are referenced
     let fileContents = [];
-    if (context.fileReferences && context.fileReferences.length > 0) {
+    if (Array.isArray(context.fileReferences) && context.fileReferences.length > 0) {
       // Find project path
-      const projects = require('../projects');
-      const project = projects.find(p => p.name === projectName);
-      
+      const { getProjects } = await import('../projects.js');
+      const projects = await getProjects();
+      const project = projects.find((p) => p.name === projectName);
+
       if (project) {
         fileContents = await readFileContents(project.path, context.fileReferences);
       }
@@ -251,7 +290,7 @@ router.post('/chat', async (req, res) => {
     res.json({
       response,
       provider: aiConfig.provider,
-      model: aiConfig.config.defaultModel,
+      model: aiConfig.model,
       timestamp: new Date().toISOString()
     });
     
@@ -320,7 +359,7 @@ router.get('/config', (req, res) => {
     const config = getAIConfig();
     res.json({
       provider: config.provider,
-      model: config.config.defaultModel,
+      model: config.model,
       configured: true
     });
   } catch (error) {
@@ -331,4 +370,4 @@ router.get('/config', (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;

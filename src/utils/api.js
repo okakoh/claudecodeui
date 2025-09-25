@@ -130,17 +130,17 @@ export const api = {
   
   // AI endpoints
   ai: {
-    chat: (data) => fetch('/api/ai/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    }),
-    generateOverview: (data) => fetch('/api/ai/generate-overview', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    }),
-    config: () => fetch('/api/ai/config'),
+    chat: (data) =>
+      authenticatedFetch('/api/ai/chat', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    generateOverview: (data) =>
+      authenticatedFetch('/api/ai/generate-overview', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    config: () => authenticatedFetch('/api/ai/config'),
   },
   
   // Generic GET method for any endpoint

@@ -192,8 +192,8 @@ app.use('/api/taskmaster', authenticateToken, taskmasterRoutes);
 // MCP utilities
 app.use('/api/mcp-utils', authenticateToken, mcpUtilsRoutes);
 
-// AI routes (no authentication required for now)
-app.use('/api/ai', aiRoutes);
+// AI routes (protected)
+app.use('/api/ai', authenticateToken, aiRoutes);
 
 // Static files served after API routes
 app.use(express.static(path.join(__dirname, '../dist')));

@@ -90,6 +90,10 @@ AI_API_KEY=your-gemini-api-key-here
 # OR for OpenRouter API (Access to multiple models)
 AI_PROVIDER=openrouter
 AI_API_KEY=your-openrouter-api-key-here
+
+# Default models
+# GEMINI_MODEL defaults to gemini-1.5-flash-002 (latest fast tier)
+# OPENROUTER_MODEL defaults to meta-llama/llama-3.1-405b-instruct (popular high-quality free model)
 ```
 
 5. **Start the application:**

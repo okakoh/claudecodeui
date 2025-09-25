@@ -243,7 +243,7 @@ function AIChatInterface({ selectedProject, onFileOpen }) {
         userMessage: input.trim()
       };
 
-      const response = await api.post('/ai/chat', {
+      const response = await api.ai.chat({
         message: input.trim(),
         context,
         projectName: selectedProject.name
