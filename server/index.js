@@ -45,6 +45,7 @@ import mcpRoutes from './routes/mcp.js';
 import cursorRoutes from './routes/cursor.js';
 import taskmasterRoutes from './routes/taskmaster.js';
 import mcpUtilsRoutes from './routes/mcp-utils.js';
+import aiRoutes from './routes/ai.js';
 import { initializeDatabase } from './database/db.js';
 import { validateApiKey, authenticateToken, authenticateWebSocket } from './middleware/auth.js';
 
@@ -190,6 +191,9 @@ app.use('/api/taskmaster', authenticateToken, taskmasterRoutes);
 
 // MCP utilities
 app.use('/api/mcp-utils', authenticateToken, mcpUtilsRoutes);
+
+// AI routes (protected)
+app.use('/api/ai', authenticateToken, aiRoutes);
 
 // Static files served after API routes
 app.use(express.static(path.join(__dirname, '../dist')));

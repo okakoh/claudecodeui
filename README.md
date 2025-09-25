@@ -43,12 +43,15 @@ A desktop and mobile UI for [Claude Code](https://docs.anthropic.com/en/docs/cla
 
 - **Responsive Design** - Works seamlessly across desktop, tablet, and mobile so you can also use Claude Code from mobile 
 - **Interactive Chat Interface** - Built-in chat interface for seamless communication with Claude Code or Cursor
+- **AI Code Assistant** - New AI-powered code analysis and explanation using Gemini or OpenRouter APIs
+- **File Reference System** - Reference files in AI chat using @filename syntax for context-aware code analysis
+- **Project Context Management** - Automatic project overview generation and intelligent file relationship detection
 - **Integrated Shell Terminal** - Direct access to Claude Code or Cursor CLI through built-in shell functionality
 - **File Explorer** - Interactive file tree with syntax highlighting and live editing
 - **Git Explorer** - View, stage and commit your changes. You can also switch branches 
 - **Session Management** - Resume conversations, manage multiple sessions, and track history
 - **TaskMaster AI Integration** *(Optional)* - Advanced project management with AI-powered task planning, PRD parsing, and workflow automation
-- **Model Compatibility** - Works with Claude Sonnet 4, Opus 4.1, and GPT-5
+- **Model Compatibility** - Works with Claude Sonnet 4, Opus 4.1, GPT-5, and other AI models via OpenRouter
 
 
 ## Quick Start
@@ -78,7 +81,23 @@ cp .env.example .env
 # Edit .env with your preferred settings
 ```
 
-4. **Start the application:**
+4. **Configure AI Integration (Optional but Recommended):**
+```bash
+# For Gemini API (Free tier available)
+AI_PROVIDER=gemini
+AI_API_KEY=your-gemini-api-key-here
+
+# OR for OpenRouter API (Access to multiple models)
+AI_PROVIDER=openrouter
+AI_API_KEY=your-openrouter-api-key-here
+
+# Default models
+# GEMINI_MODEL defaults to gemini-2.5-flash (latest fast Gemini release)
+#   - Switch to gemini-2.5-pro in .env or from the in-app model selector for higher quality responses
+# OPENROUTER_MODEL defaults to meta-llama/llama-3.1-405b-instruct (popular high-quality free model)
+```
+
+5. **Start the application:**
 ```bash
 # Development mode (with hot reload)
 npm run dev
@@ -86,7 +105,7 @@ npm run dev
 ```
 The application will start at the port you specified in your .env
 
-5. **Open your browser:**
+6. **Open your browser:**
    - Development: `http://localhost:3001`
 
 ## Security & Tools Configuration
@@ -140,6 +159,22 @@ The UI automatically discovers Claude Code projects from `~/.claude/projects/` a
 - **Session Management** - Resume previous conversations or start fresh sessions
 - **Message History** - Complete conversation history with timestamps and metadata
 - **Multi-format Support** - Text, code blocks, and file references
+
+#### AI Code Assistant
+- **Intelligent Code Analysis** - Ask questions about your codebase structure and functionality
+- **File Reference System** - Use `@filename` syntax to reference specific files in your questions
+- **Project Context Awareness** - AI understands your project structure, technologies, and relationships
+- **Code Explanation** - Get detailed explanations of complex code patterns and architectures
+- **Best Practice Suggestions** - Receive recommendations for code improvements and optimizations
+- **Multi-Model Support** - Works with Gemini, Claude, GPT, and other models via OpenRouter
+
+**Example AI Assistant Usage:**
+- "Explain the main structure of this project"
+- "What does @App.jsx do and how does it work?"
+- "How does authentication work in this codebase?"
+- "Find all API endpoints and explain their purpose"
+- "What are the main dependencies and why are they used?"
+- "Suggest improvements for @Component.jsx"
 
 #### File Explorer & Editor
 - **Interactive File Tree** - Browse project structure with expand/collapse navigation
